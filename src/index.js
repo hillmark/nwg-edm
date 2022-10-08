@@ -2,29 +2,55 @@ import "leaflet/dist/leaflet.css";
 
 import Papa from "papaparse";
 import * as L from "leaflet";
+import HeatmapOverlay from "heatmap.js/plugins/leaflet-heatmap";
 
 import csvString from "./data.txt"; // https://www.doogal.co.uk/BatchReverseGeocoding
 
-const data = Papa.parse(csvString, {
+const scale = (number, inMin, inMax, outMin, outMax) =>
+  ((number - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin;
+
+const csv = Papa.parse(csvString, {
   header: true,
   delimiter: ",",
   quoteChar: '"',
 });
 
-const total = data.data.reduce(
+csv.data.forEach((row) => {
+  row.o = isNaN(row.o) ? 0 : +row.o;
+  row.p = isNaN(row.p) ? 0 : +row.p;
+  row.lat = +row.lat;
+  row.lng = +row.lng;
+});
+
+const total = csv.data.reduce(
   (sum, row) => [sum[0] + +row.lat, sum[1] + +row.lng],
   [0, 0]
 );
-const center = [total[0] / data.data.length, total[1] / data.data.length];
+const center = [total[0] / csv.data.length, total[1] / csv.data.length];
+const maxDuration = Math.max(...csv.data.map((x) => x.o));
+const maxSpills = Math.max(...csv.data.map((x) => x.p));
+
 const map = L.map("map", {
   center,
   zoom: 8,
+  layers: [],
 });
 
-const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  attribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-}).addTo(map);
+const streetmap = L.tileLayer(
+  "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  {
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }
+).addTo(map);
+
+const satellite = L.tileLayer(
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  {
+    attribution:
+      "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
+  }
+);
 
 const icon = L.icon({
   iconUrl:
@@ -40,14 +66,81 @@ const popup = (row) => `
     <p><b>Spills count:</b> ${row.p}
   </div>
 `;
-const markers = data.data.map((row) =>
-  L.marker([row.lat, row.lng], { icon }).bindPopup(popup(row)).addTo(map)
+
+const shortRainbow = (f) => {
+  var a = (1 - f) / 0.25;
+  var X = Math.floor(a);
+  var Y = Math.floor(255 * (a - X));
+  let r, g, b;
+  switch (X) {
+    case 0:
+      r = 255;
+      g = Y;
+      b = 0;
+      break;
+    case 1:
+      r = 255 - Y;
+      g = 255;
+      b = 0;
+      break;
+    case 2:
+      r = 0;
+      g = 255;
+      b = Y;
+      break;
+    case 3:
+      r = 0;
+      g = 255 - Y;
+      b = 255;
+      break;
+    case 4:
+      r = 0;
+      g = 0;
+      b = 255;
+      break;
+  }
+  return "rgb(" + r + "," + g + "," + b + ")";
+};
+
+const layerGroup = new L.LayerGroup().addTo(map);
+
+// const markers = csv.data.map((row) =>
+//   L.marker([row.lat, row.lng], { icon }).bindPopup(popup(row)).addTo(layerGroup)
+// );
+
+const markers = csv.data.map((row) =>
+  L.circleMarker([row.lat, row.lng], {
+    weight: 1.5,
+    color: shortRainbow(scale(row.o, 0, maxDuration, 0, 1)),
+    fill: true,
+    fillOpacity: 0.35,
+    radius: scale(row.o, 0, maxDuration, 3, 25),
+  })
+    .bindPopup(popup(row))
+    .addTo(layerGroup)
 );
-//
-// const basemaps = {
-//   OSM: osm,
-// };
-// const overlaymaps = {
-//   Markers: markers,
-// };
-// L.control.layers(basemaps, overlaymaps).addTo(map);
+
+const heatmapLayer = new HeatmapOverlay({
+  radius: 0.05,
+  maxOpacity: 0.65,
+  blur: 0.85,
+  scaleRadius: true,
+  useLocalExtrema: true,
+  latField: "lat",
+  lngField: "lng",
+  valueField: "o",
+});
+
+heatmapLayer.setData({ max: maxDuration, data: csv.data });
+
+const basemaps = {
+  Street: streetmap,
+  Satelite: satellite,
+};
+
+const overlaymaps = {
+  Markers: layerGroup,
+  Heat: heatmapLayer,
+};
+
+L.control.layers(basemaps, overlaymaps).addTo(map);
