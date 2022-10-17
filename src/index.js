@@ -59,7 +59,7 @@ const satellite = L.tileLayer(
 // });
 
 const popup = (row) => `
-  <div>
+  <div class="popup">
     <p><b>Site Name:</b> ${row.b}
     <p><b>Receiving Water:</b> ${row.k}
     <p><b>Spills duration (hrs):</b> ${row.o}
@@ -67,9 +67,7 @@ const popup = (row) => `
   </div>
 `;
 
-const colorscale = chroma
-  .scale(["rgb(0,0,255)", "rgb(0,200,0)", "yellow", "rgb(255,0,0)"])
-  .domain([0.25, 0.55, 0.85, 1.0]);
+const colorscale = chroma.scale(["navy", "purple", "red"]);
 
 const layerGroup = new L.LayerGroup().addTo(map);
 
@@ -77,7 +75,9 @@ const markers = csv.data.map((row) =>
   L.circleMarker([row.lat, row.lng], {
     weight: 1.5,
     color:
-      row.o == 0 ? "#666" : colorscale(scale(row.o, 0, maxDuration, 0, 1.0)),
+      row.o == 0
+        ? "darkgreen"
+        : colorscale(scale(row.o, 0, maxDuration, 0.0, 1.0)),
     fill: true,
     fillOpacity: 0.75,
     radius: scale(row.o, 0, maxDuration, 5, 25),

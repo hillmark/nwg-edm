@@ -45,6 +45,10 @@ h2 {
   margin: 0.5rem 0;
 }
 
+div.leaflet-popup-content p {
+  margin: 0;
+}
+
 @media screen and (max-width: 699px) {
   header {
     height: 35px;
