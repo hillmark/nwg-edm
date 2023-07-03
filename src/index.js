@@ -237,16 +237,23 @@ const markers = csv.data.map((row, index) => {
 
 const heatmapLayer = new HeatmapOverlay({
   radius: 0.05,
-  maxOpacity: 0.65,
+  maxOpacity: 0.85,
   blur: 0.85,
   scaleRadius: true,
   useLocalExtrema: true,
   latField: "lat",
   lngField: "lng",
-  valueField: "spills_duration",
+  valueField: "value",
 });
 
-heatmapLayer.setData({ max: maxDuration, data: csv.data });
+heatmapLayer.setData({
+  max: maxDuration,
+  data: csv.data.map((d, i) => ({
+    lat: d.lat,
+    lng: d.lng,
+    value: normalizedSpills[i],
+  })),
+});
 
 const basemaps = {
   Street: streetmap,
