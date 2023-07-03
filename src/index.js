@@ -38,8 +38,43 @@ const headers = [
   "Longitude",
 ];
 
-const scale = (number, inMin, inMax, outMin, outMax) =>
-  ((number - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin;
+// const scale = (number, inMin, inMax, outMin, outMax) =>
+//   ((number - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin;
+
+function scale(value, inputRange, outputRange) {
+  const [inputMin, inputMax] = inputRange;
+  const [outputMin, outputMax] = outputRange;
+
+  // Clamp the value to the input range
+  const clampedValue = Math.max(Math.min(value, inputMax), inputMin);
+
+  // Map the clamped value to the output range
+  const scaledValue =
+    ((clampedValue - inputMin) / (inputMax - inputMin)) *
+      (outputMax - outputMin) +
+    outputMin;
+
+  return scaledValue;
+}
+
+function normalize(data) {
+  const mean = calculateMean(data);
+  const stdDev = calculateStandardDeviation(data, mean);
+  const normalizedData = data.map((value) => (value - mean) / stdDev);
+  return normalizedData;
+}
+
+function calculateMean(data) {
+  const sum = data.reduce((acc, value) => acc + value, 0);
+  return sum / data.length;
+}
+
+function calculateStandardDeviation(data, mean) {
+  const squaredDifferences = data.map((value) => Math.pow(value - mean, 2));
+  const variance =
+    squaredDifferences.reduce((acc, value) => acc + value, 0) / data.length;
+  return Math.sqrt(variance);
+}
 
 const csv = Papa.parse(csvString, {
   header: true,
@@ -84,7 +119,6 @@ const total = csv.data.reduce(
 
 const center = [total[0] / csv.data.length, total[1] / csv.data.length];
 const maxDuration = Math.max(...csv.data.map((x) => x.spills_duration));
-const maxSpills = Math.max(...csv.data.map((x) => x.spills_count));
 
 const map = L.map("map", {
   center,
@@ -176,14 +210,18 @@ const assetShapePrefixMap = {
   "Storm tank": "up",
 };
 
-const markers = csv.data.map((row) => {
+const normalizedSpills = normalize(csv.data.map((d) => d.spills_duration));
+const normalMin = Math.min(...normalizedSpills);
+const normalMax = Math.max(...normalizedSpills);
+
+const markers = csv.data.map((row, index) => {
   let color = "#04A40B";
   if (row.monitoring > 50 && row.monitoring < 90) {
     color = "#FF5F1F";
   } else if (row.monitoring < 50) {
     color = "#f00";
   }
-  const size = scale(row.spills_duration, 0, maxDuration, 15, 50);
+  const size = scale(normalizedSpills[index], [normalMin, normalMax], [15, 35]);
 
   const key = Object.keys(assetShapePrefixMap).filter((k) =>
     row.asset_type.startsWith(k)
