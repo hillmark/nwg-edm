@@ -1,3 +1,3 @@
-# Northumbria Water Storm Overflow Annual Return
+# NWG Event Duration Monitoring
 
-Visualises annual return data obtained from a FOI request.
+Visualises data obtained from https://www.nwg.co.uk/responsibility/environment/event-duration-monitoring/

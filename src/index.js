@@ -3,9 +3,40 @@ import "leaflet/dist/leaflet.css";
 import Papa from "papaparse";
 import * as L from "leaflet";
 import HeatmapOverlay from "heatmap.js/plugins/leaflet-heatmap";
-import * as chroma from "chroma-js";
+import csvString from "./2022data.txt"; // https://www.doogal.co.uk/BatchReverseGeocoding
 
-import csvString from "./data.txt"; // https://www.doogal.co.uk/BatchReverseGeocoding
+// 2022 headers
+const headers = [
+  "Water Company Name",
+  "Site Name\n(EA Consents Database)",
+  "Site Name\n(WaSC operational)\n[optional]",
+  "EA Permit Reference\n(EA Consents Database)",
+  "WaSC Supplementary Permit Ref.\n[optional]",
+  "Activity Reference on Permit",
+  "Storm Discharge Asset Type",
+  "Outlet Discharge NGR\n(EA Consents Database)",
+  "WFD Waterbody ID (Cycle 2)\n(discharge outlet)",
+  "WFD Waterbody Catchment Name (Cycle 2)\n(discharge outlet)",
+  "Receiving Water / Environment (common name)\n(EA Consents Database)",
+  "Shellfish Water (only populate for storm overflow with a Shellfish Water EDM requirement)",
+  "Bathing Water (only populate for storm overflow with a Bathing Water EDM requirement)",
+  "Treatment Method\n(over & above Storm Tank settlement / screening)",
+  "Initial EDM Commission Date",
+  "Total Duration (hrs) all spills prior to processing through 12-24h count method",
+  "Counted spills using 12-24h count method",
+  "Long-term average spill count",
+  "No. full years EDM data\n(years)",
+  "EDM Operation -\n% of reporting period EDM operational",
+  "EDM Operation -\nReporting % -\nPrimary Reason <90%",
+  "EDM Operation -\nAction taken / planned -\nStatus & timeframe",
+  "High Spill Frequency -\nOperational Review -\nPrimary Reason",
+  "High Spill Frequency -\nAction taken / planned -\nStatus & timeframe",
+  "High Spill Frequency -\nEnvironmental Enhancement -\nPlanning Position (Hydraulic capacity)",
+  "",
+  "Grid reference",
+  "Latitude",
+  "Longitude",
+];
 
 const scale = (number, inMin, inMax, outMin, outMax) =>
   ((number - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin;
@@ -14,22 +45,46 @@ const csv = Papa.parse(csvString, {
   header: true,
   delimiter: ",",
   quoteChar: '"',
+  transformHeader: (header, index) => {
+    switch (index) {
+      case 1:
+        return "site_name";
+      case 6:
+        return "asset_type";
+      case 10:
+        return "receiving_water";
+      case 15:
+        return "spills_duration";
+      case 16:
+        return "spills_count";
+      case 19:
+        return "monitoring";
+      case 27:
+        return "lat";
+      case 28:
+        return "lng";
+      default:
+        return header;
+    }
+  },
 });
 
 csv.data.forEach((row) => {
-  row.o = isNaN(row.o) ? 0 : +row.o;
-  row.p = isNaN(row.p) ? 0 : +row.p;
+  row.spills_duration = +row.spills_duration;
+  row.spills_count = isNaN(row.spills_count) ? 0 : +row.spills_count;
   row.lat = +row.lat;
   row.lng = +row.lng;
+  row.monitoring = +row.monitoring.replace("%", "");
 });
 
 const total = csv.data.reduce(
-  (sum, row) => [sum[0] + +row.lat, sum[1] + +row.lng],
+  (sum, row) => [sum[0] + row.lat, sum[1] + row.lng],
   [0, 0]
 );
+
 const center = [total[0] / csv.data.length, total[1] / csv.data.length];
-const maxDuration = Math.max(...csv.data.map((x) => x.o));
-const maxSpills = Math.max(...csv.data.map((x) => x.p));
+const maxDuration = Math.max(...csv.data.map((x) => x.spills_duration));
+const maxSpills = Math.max(...csv.data.map((x) => x.spills_count));
 
 const map = L.map("map", {
   center,
@@ -53,38 +108,94 @@ const satellite = L.tileLayer(
   }
 );
 
-// const icon = L.icon({
-//   iconUrl:
-//     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAApCAYAAADAk4LOAAAFgUlEQVR4Aa1XA5BjWRTN2oW17d3YaZtr2962HUzbDNpjszW24mRt28p47v7zq/bXZtrp/lWnXr337j3nPCe85NcypgSFdugCpW5YoDAMRaIMqRi6aKq5E3YqDQO3qAwjVWrD8Ncq/RBpykd8oZUb/kaJutow8r1aP9II0WmLKLIsJyv1w/kqw9Ch2MYdB++12Onxee/QMwvf4/Dk/Lfp/i4nxTXtOoQ4pW5Aj7wpici1A9erdAN2OH64x8OSP9j3Ft3b7aWkTg/Fm91siTra0f9on5sQr9INejH6CUUUpavjFNq1B+Oadhxmnfa8RfEmN8VNAsQhPqF55xHkMzz3jSmChWU6f7/XZKNH+9+hBLOHYozuKQPxyMPUKkrX/K0uWnfFaJGS1QPRtZsOPtr3NsW0uyh6NNCOkU3Yz+bXbT3I8G3xE5EXLXtCXbbqwCO9zPQYPRTZ5vIDXD7U+w7rFDEoUUf7ibHIR4y6bLVPXrz8JVZEql13trxwue/uDivd3fkWRbS6/IA2bID4uk0UpF1N8qLlbBlXs4Ee7HLTfV1j54APvODnSfOWBqtKVvjgLKzF5YdEk5ewRkGlK0i33Eofffc7HT56jD7/6U+qH3Cx7SBLNntH5YIPvODnyfIXZYRVDPqgHtLs5ABHD3YzLuespb7t79FY34DjMwrVrcTuwlT55YMPvOBnRrJ4VXTdNnYug5ucHLBjEpt30701A3Ts+HEa73u6dT3FNWwflY86eMHPk+Yu+i6pzUpRrW7SNDg5JHR4KapmM5Wv2E8Tfcb1HoqqHMHU+uWDD7zg54mz5/2BSnizi9T1Dg4QQXLToGNCkb6tb1NU+QAlGr1++eADrzhn/u8Q2YZhQVlZ5+CAOtqfbhmaUCS1ezNFVm2imDbPmPng5wmz+gwh+oHDce0eUtQ6OGDIyR0uUhUsoO3vfDmmgOezH0mZN59x7MBi++WDL1g/eEiU3avlidO671bkLfwbw5XV2P8Pzo0ydy4t2/0eu33xYSOMOD8hTf4CrBtGMSoXfPLchX+J0ruSePw3LZeK0juPJbYzrhkH0io7B3k164hiGvawhOKMLkrQLyVpZg8rHFW7E2uHOL888IBPlNZ1FPzstSJM694fWr6RwpvcJK60+0HCILTBzZLFNdtAzJaohze60T8qBzyh5ZuOg5e7uwQppofEmf2++DYvmySqGBuKaicF1blQjhuHdvCIMvp8whTTfZzI7RldpwtSzL+F1+wkdZ2TBOW2gIF88PBTzD/gpeREAMEbxnJcaJHNHrpzji0gQCS6hdkEeYt9DF/2qPcEC8RM28Hwmr3sdNyht00byAut2k3gufWNtgtOEOFGUwcXWNDbdNbpgBGxEvKkOQsxivJx33iow0Vw5S6SVTrpVq11ysA2Rp7gTfPfktc6zhtXBBC+adRLshf6sG2RfHPZ5EAc4sVZ83yCN00Fk/4kggu40ZTvIEm5g24qtU4KjBrx/BTTH8ifVASAG7gKrnWxJDcU7x8X6Ecczhm3o6YicvsLXWfh3Ch1W0k8x0nXF+0fFxgt4phz8QvypiwCCFKMqXCnqXExjq10beH+UUA7+nG6mdG/Pu0f3LgFcGrl2s0kNNjpmoJ9o4B29CMO8dMT4Q5ox8uitF6fqsrJOr8qnwNbRzv6hSnG5wP+64C7h9lp30hKNtKdWjtdkbuPA19nJ7Tz3zR/ibgARbhb4AlhavcBebmTHcFl2fvYEnW0ox9xMxKBS8btJ+KiEbq9zA4RthQXDhPa0T9TEe69gWupwc6uBUphquXgf+/FrIjweHQS4/pduMe5ERUMHUd9xv8ZR98CxkS4F2n3EUrUZ10EYNw7BWm9x1GiPssi3GgiGRDKWRYZfXlON+dfNbM+GgIwYdwAAAAASUVORK5CYII=",
-// });
+const createSvg = (path, size) => {
+  return `<svg
+    width=${size}
+    height=${size}
+    viewBox="0 0 100 100"
+    version="1.1"
+    preserveAspectRatio="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    ${path}
+  </svg>`;
+};
+
+const createShape = (name, size, fill = "#f00", opacity = 1.0) => {
+  switch (name) {
+    case "circle":
+      return createSvg(
+        `<circle cx="50" cy="50" r="50" fill-opacity="${opacity}" fill=${fill}></circle>`,
+        size
+      );
+    case "down":
+      return createSvg(
+        `<path d="M0 0 L50 100 L100 0 Z" fill-opacity="${opacity}" fill=${fill}></path>`,
+        size
+      );
+    case "rect":
+      return createSvg(
+        `<rect width="100" height="100" fill-opacity="${opacity}" fill=${fill}></rect>`,
+        size
+      );
+    case "up":
+      return createSvg(
+        `<path d="M50 0 L0 100 L100 100 Z" fill-opacity="${opacity}" fill=${fill}></path>`,
+        size
+      );
+    default:
+      break;
+  }
+};
+
+const svgIcon = (name, size, color, opacity = 1.0) =>
+  L.divIcon({
+    html: createShape(name, size, color, opacity),
+    className: "svg-icon",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
 
 const popup = (row) => `
   <div class="popup">
-    <p><b>Site Name:</b> ${row.b}
-    <p><b>Receiving Water:</b> ${row.k}
-    <p><b>Spills duration (hrs):</b> ${row.o}
-    <p><b>Spills count:</b> ${row.p}
+    <p><b>Site Name:</b> ${row.site_name}
+    <p><b>Receiving Water:</b> ${row.receiving_water}
+    <p><b>Spills duration (hrs):</b> ${row.spills_duration}
+    <p><b>Spills count:</b> ${row.spills_count}
+    <p><b>Monitoring:</b> ${row.monitoring}%
+    <p><b>Asset Type:</b> ${row.asset_type}
   </div>
 `;
 
-const colorscale = chroma.scale(["navy", "purple", "red"]);
-
 const layerGroup = new L.LayerGroup().addTo(map);
 
-const markers = csv.data.map((row) =>
-  L.circleMarker([row.lat, row.lng], {
-    weight: 1.5,
-    color:
-      row.o == 0
-        ? "darkgreen"
-        : colorscale(scale(row.o, 0, maxDuration, 0.0, 1.0)),
-    fill: true,
-    fillOpacity: 0.75,
-    radius: scale(row.o, 0, maxDuration, 5, 25),
+const assetShapePrefixMap = {
+  "Inlet SO": "circle",
+  "SO on sewer network": "down",
+  "Storm discharge": "rect",
+  "Storm tank": "up",
+};
+
+const markers = csv.data.map((row) => {
+  let color = "#04A40B";
+  if (row.monitoring > 50 && row.monitoring < 90) {
+    color = "#FF5F1F";
+  } else if (row.monitoring < 50) {
+    color = "#f00";
+  }
+  const size = scale(row.spills_duration, 0, maxDuration, 15, 50);
+
+  const key = Object.keys(assetShapePrefixMap).filter((k) =>
+    row.asset_type.startsWith(k)
+  );
+  const shape = assetShapePrefixMap[key] ?? "circle";
+
+  return L.marker([row.lat, row.lng], {
+    icon: svgIcon(shape, size, color, 0.85),
   })
     .bindPopup(popup(row))
-    .addTo(layerGroup)
-);
+    .addTo(layerGroup);
+});
 
 const heatmapLayer = new HeatmapOverlay({
   radius: 0.05,
@@ -94,7 +205,7 @@ const heatmapLayer = new HeatmapOverlay({
   useLocalExtrema: true,
   latField: "lat",
   lngField: "lng",
-  valueField: "o",
+  valueField: "spills_duration",
 });
 
 heatmapLayer.setData({ max: maxDuration, data: csv.data });
