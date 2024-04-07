@@ -2,8 +2,14 @@ import "leaflet/dist/leaflet.css";
 
 import Papa from "papaparse";
 import * as L from "leaflet";
-import HeatmapOverlay from "heatmap.js/plugins/leaflet-heatmap";
-import csvString from "./2023data.txt"; // https://www.doogal.co.uk/BatchReverseGeocoding
+// import HeatmapOverlay from "heatmap.js/plugins/leaflet-heatmap";
+import edm2022 from "./2022data.txt";
+import edm2023 from "./2023data.txt";
+
+const edmMap = {
+  edm2022,
+  edm2023
+}
 
 // 2022 headers
 const headers = [
@@ -76,50 +82,14 @@ function calculateStandardDeviation(data, mean) {
   return Math.sqrt(variance);
 }
 
-const csv = Papa.parse(csvString, {
-  header: true,
-  delimiter: ",",
-  quoteChar: '"',
-  transformHeader: (header, index) => {
-    switch (index) {
-      case 1:
-        return "site_name";
-      case 6:
-        return "asset_type";
-      case 10:
-        return "receiving_water";
-      case 15:
-        return "spills_duration";
-      case 16:
-        return "spills_count";
-      case 19:
-        return "monitoring";
-      case 27:
-        return "lat";
-      case 28:
-        return "lng";
-      default:
-        return header;
-    }
-  },
-});
+// const total = csv.data.reduce(
+//   (sum, row) => [sum[0] + row.lat, sum[1] + row.lng],
+//   [0, 0]
+// );
 
-csv.data.forEach((row) => {
-  row.spills_duration = +row.spills_duration;
-  row.spills_count = isNaN(row.spills_count) ? 0 : +row.spills_count;
-  row.lat = +row.lat;
-  row.lng = +row.lng;
-  row.monitoring = +row.monitoring.replace("%", "");
-});
-
-const total = csv.data.reduce(
-  (sum, row) => [sum[0] + row.lat, sum[1] + row.lng],
-  [0, 0]
-);
-
-const center = [total[0] / csv.data.length, total[1] / csv.data.length];
-const maxDuration = Math.max(...csv.data.map((x) => x.spills_duration));
-
+// const center = [total[0] / csv.data.length, total[1] / csv.data.length];
+// const maxDuration = Math.max(...csv.data.map((x) => x.spills_duration));
+const center = [54.88148034207166, -1.613449133631712];
 const map = L.map("map", {
   center,
   zoom: 8,
@@ -210,50 +180,53 @@ const assetShapePrefixMap = {
   "Storm tank": "up",
 };
 
-const normalizedSpills = normalize(csv.data.map((d) => d.spills_duration));
-const normalMin = Math.min(...normalizedSpills);
-const normalMax = Math.max(...normalizedSpills);
+const addMarkers = (data) => {
 
-const markers = csv.data.map((row, index) => {
-  let color = "#04A40B";
-  if (row.monitoring > 50 && row.monitoring < 90) {
-    color = "#FF5F1F";
-  } else if (row.monitoring < 50) {
-    color = "#f00";
-  }
-  const size = scale(normalizedSpills[index], [normalMin, normalMax], [15, 35]);
+  const normalizedSpills = normalize(data.map((d) => d.spills_duration));
+  const normalMin = Math.min(...normalizedSpills);
+  const normalMax = Math.max(...normalizedSpills);
 
-  const key = Object.keys(assetShapePrefixMap).filter((k) =>
-    row.asset_type.startsWith(k)
-  );
-  const shape = assetShapePrefixMap[key] ?? "circle";
+  data.forEach((row, index) => {
+    let color = "#04A40B";
+    if (row.monitoring > 50 && row.monitoring < 90) {
+      color = "#FF5F1F";
+    } else if (row.monitoring < 50) {
+      color = "#f00";
+    }
+    const size = scale(normalizedSpills[index], [normalMin, normalMax], [15, 35]);
 
-  return L.marker([row.lat, row.lng], {
-    icon: svgIcon(shape, size, color, 0.85),
-  })
-    .bindPopup(popup(row))
-    .addTo(layerGroup);
-});
+    const key = Object.keys(assetShapePrefixMap).filter((k) =>
+      row.asset_type.startsWith(k)
+    );
+    const shape = assetShapePrefixMap[key] ?? "circle";
 
-const heatmapLayer = new HeatmapOverlay({
-  radius: 0.05,
-  maxOpacity: 0.85,
-  blur: 0.85,
-  scaleRadius: true,
-  useLocalExtrema: true,
-  latField: "lat",
-  lngField: "lng",
-  valueField: "value",
-});
+    L.marker([row.lat, row.lng], {
+      icon: svgIcon(shape, size, color, 0.85),
+    })
+      .bindPopup(popup(row))
+      .addTo(layerGroup);
+  });
+}
 
-heatmapLayer.setData({
-  max: maxDuration,
-  data: csv.data.map((d, i) => ({
-    lat: d.lat,
-    lng: d.lng,
-    value: normalizedSpills[i],
-  })),
-});
+// const heatmapLayer = new HeatmapOverlay({
+//   radius: 0.05,
+//   maxOpacity: 0.85,
+//   blur: 0.85,
+//   scaleRadius: true,
+//   useLocalExtrema: true,
+//   latField: "lat",
+//   lngField: "lng",
+//   valueField: "value",
+// });
+
+// heatmapLayer.setData({
+//   max: maxDuration,
+//   data: csv.data.map((d, i) => ({
+//     lat: d.lat,
+//     lng: d.lng,
+//     value: normalizedSpills[i],
+//   })),
+// });
 
 const basemaps = {
   Street: streetmap,
@@ -262,7 +235,65 @@ const basemaps = {
 
 const overlaymaps = {
   Markers: layerGroup,
-  Heat: heatmapLayer,
+  // Heat: heatmapLayer,
 };
 
 L.control.layers(basemaps, overlaymaps).addTo(map);
+
+
+const getData = (csvString) => {
+  const csv = Papa.parse(csvString, {
+    header: true,
+    delimiter: ",",
+    quoteChar: '"',
+    transformHeader: (header, index) => {
+      switch (index) {
+        case 1:
+          return "site_name";
+        case 6:
+          return "asset_type";
+        case 10:
+          return "receiving_water";
+        case 15:
+          return "spills_duration";
+        case 16:
+          return "spills_count";
+        case 19:
+          return "monitoring";
+        case 27:
+          return "lat";
+        case 28:
+          return "lng";
+        default:
+          return header;
+      }
+    },
+  });
+
+  csv.data.forEach((row) => {
+    row.spills_duration = +row.spills_duration;
+    row.spills_count = isNaN(row.spills_count) ? 0 : +row.spills_count;
+    row.lat = +row.lat;
+    row.lng = +row.lng;
+    row.monitoring = +row.monitoring.replace("%", "");
+  });
+
+  return csv.data;
+}
+
+window.addEventListener("load", function () {
+  let selectedEdm = "edm2023";
+  let csvString = edmMap[selectedEdm]
+  let data = getData(csvString);
+  layerGroup.clearLayers();
+  addMarkers(data);
+
+  document.getElementById("edmYear").addEventListener("change",function() {
+    if (this.value == "" || this.value === selectedEdm) return;
+    selectedEdm = this.value;
+    csvString = edmMap[selectedEdm]
+    data = getData(csvString);
+    layerGroup.clearLayers();
+    addMarkers(data);
+  }); 
+});

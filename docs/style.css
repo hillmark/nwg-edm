@@ -18,7 +18,7 @@ body {
 }
 
 header {
-  height: 50px;
+  padding: 10px;
 }
 
 main {
@@ -33,6 +33,9 @@ footer {
 a {
   text-decoration: none;
   color: grey;
+}
+
+#controls {
 }
 
 #map {
