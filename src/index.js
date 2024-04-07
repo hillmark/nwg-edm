@@ -3,7 +3,7 @@ import "leaflet/dist/leaflet.css";
 import Papa from "papaparse";
 import * as L from "leaflet";
 import HeatmapOverlay from "heatmap.js/plugins/leaflet-heatmap";
-import csvString from "./2022data.txt"; // https://www.doogal.co.uk/BatchReverseGeocoding
+import csvString from "./2023data.txt"; // https://www.doogal.co.uk/BatchReverseGeocoding
 
 // 2022 headers
 const headers = [
